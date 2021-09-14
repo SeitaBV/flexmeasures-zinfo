@@ -2,6 +2,8 @@ __version__ = "0.2"
 
 import os
 import sys
+from datetime import datetime
+from pytz import utc
 from typing import List
 
 import click
@@ -13,7 +15,6 @@ from flexmeasures.data.models.data_sources import DataSource
 from flexmeasures.data.models.generic_assets import GenericAsset
 from flexmeasures.data.models.time_series import Sensor
 from flexmeasures.data.transactional import task_with_status_report
-from flexmeasures.utils.time_utils import server_now
 import pandas as pd
 import requests
 from timely_beliefs import BeliefsDataFrame
@@ -63,7 +64,7 @@ def import_sensor_data(dryrun: bool = False):
         f"{ZINFO_API_BASE_URL}/zi_wsr.svc/JSON/NL.13/?spcid={zinfo_spcid}",
         headers={"Authorization": access_token},
     )
-    now = server_now()
+    now = datetime.now(tz=utc)
     response = res.json()
     values = response.get("waarden", [])
     current_app.logger.info(f"Got {len(values)} values...")
@@ -122,7 +123,7 @@ def import_sensor_data(dryrun: bool = False):
             df_sensor.index.name = "event_start"
             df_sensor.name = "event_value"
 
-            df_sensor = df_sensor.tz_localize(sensor.timezone)
+            df_sensor = df_sensor.tz_localize(sensor.timezone).tz_convert(utc)
             bdf = BeliefsDataFrame(
                 df_sensor,
                 source=data_source,
