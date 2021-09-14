@@ -14,6 +14,7 @@ from flexmeasures.data.config import db
 from flexmeasures.data.models.data_sources import DataSource
 from flexmeasures.data.models.generic_assets import GenericAsset
 from flexmeasures.data.models.time_series import Sensor
+from flexmeasures.data.services.time_series import drop_unchanged_beliefs
 from flexmeasures.data.transactional import task_with_status_report
 import pandas as pd
 import requests
@@ -130,6 +131,10 @@ def import_sensor_data(dryrun: bool = False):
                 sensor=sensor,
                 belief_time=now,
             )
+
+            # Drop beliefs that haven't changed
+            bdf = drop_unchanged_beliefs(bdf)
+
             # TODO: evaluate some traits of the data via FlexMeasures, see https://github.com/SeitaBV/flexmeasures-entsoe/issues/3
             save_to_db(bdf)
 
