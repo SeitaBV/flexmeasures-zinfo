@@ -16,10 +16,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 zinfo_bp = Blueprint("zinfo", __name__)
-
 ZINFO_API_BASE_URL = "https://webservice.z-info.nl/WSR"
-
 zinfo_bp.cli.help = "Z-info Data commands"
+
 
 @zinfo_bp.cli.command("import-sensor-data")
 @click.option(
@@ -31,7 +30,7 @@ zinfo_bp.cli.help = "Z-info Data commands"
 @task_with_status_report
 def import_sensor_data(dryrun: bool = False):
     """
-    Import sensor data
+    Import sensor data from Z-info.
     """
     access_token = get_access_token()
     zinfo_spcid = current_app.config.get("ZINFO_SPCID", None)
