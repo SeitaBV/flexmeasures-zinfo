@@ -83,8 +83,11 @@ def import_sensor_data(dryrun: bool = False):
     zinfo_sensor_names_received: List[str] = df.index.get_level_values(
         zinfo_sensor_name_field
     ).unique()
+    df_sensors = []
     for zinfo_sensor_name in zinfo_sensor_names_received:
-        mask = df.index.get_level_values(zinfo_sensor_name_field) == zinfo_sensor_name
+        df_sensor = df.loc[
+            df.index.get_level_values(zinfo_sensor_name_field) == zinfo_sensor_name
+        ]
         if zinfo_sensor_name not in zinfo_sensor_mapping:
             current_app.logger.error(
                 f"Missing Z-info sensor name {zinfo_sensor_name} in your ZINFO_SENSOR_MAPPING config setting."
@@ -92,7 +95,9 @@ def import_sensor_data(dryrun: bool = False):
             continue
         method_kwargs = zinfo_sensor_mapping[zinfo_sensor_name]["pandas_method_kwargs"]
         for method, kwargs in method_kwargs:
-            df.loc[mask] = getattr(df.loc[mask], method)(**kwargs)
+            df_sensor = getattr(df_sensor, method)(**kwargs)
+        df_sensors.append(df_sensor)
+    df = pd.concat(df_sensors, axis=0)
 
     if not dryrun:
         # Save
