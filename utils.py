@@ -50,4 +50,3 @@ def get_access_token() -> str:
         pickle.dump([access_token, valid_until], f)
 
     return access_token
-
