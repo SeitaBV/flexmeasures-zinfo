@@ -19,9 +19,9 @@ def get_access_token() -> str:
         with open(access_storage, "rb") as f:
             access_token, valid_until = pickle.load(f)
         if now < valid_until:
-            print("Re-using earlier ZInfo access token ...")
+            print("Re-using earlier Z-info access token ...")
             return access_token
-    print("Getting a fresh Z-Info access token ...")
+    print("Getting a fresh Z-info access token ...")
     zinfo_username = current_app.config.get("ZINFO_USERNAME", None)
     if not zinfo_username:
         click.echo("ZINFO_USERNAME setting is not given!")
