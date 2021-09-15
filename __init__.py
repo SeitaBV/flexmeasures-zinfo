@@ -28,6 +28,7 @@ sys.path.insert(0, HERE)
 
 zinfo_bp = Blueprint("zinfo", __name__)
 ZINFO_API_BASE_URL = "https://webservice.z-info.nl/WSR"
+ZINFO_TIMEZONE = "Europe/Amsterdam"
 zinfo_bp.cli.help = "Z-info Data commands"
 
 
@@ -72,8 +73,13 @@ def import_sensor_data(dryrun: bool = False):
 
     # Parse response
     df = pd.DataFrame(values)
+    df = df.iloc[::-1]  # switch order of values so that they run from past to present
     df[zinfo_event_value_field] = pd.to_numeric(df[zinfo_event_value_field])
-    df[zinfo_event_end_field] = pd.to_datetime(df[zinfo_event_end_field])
+    df[zinfo_event_end_field] = (
+        pd.to_datetime(df[zinfo_event_end_field])
+        .dt.tz_localize(ZINFO_TIMEZONE, ambiguous="infer")
+        .dt.tz_convert(utc)
+    )
     df = (
         df.set_index([zinfo_event_end_field, zinfo_sensor_name_field])
         .sort_index()[zinfo_event_value_field]
@@ -124,7 +130,6 @@ def import_sensor_data(dryrun: bool = False):
             df_sensor.index.name = "event_start"
             df_sensor.name = "event_value"
 
-            df_sensor = df_sensor.tz_localize(sensor.timezone).tz_convert(utc)
             bdf = BeliefsDataFrame(
                 df_sensor,
                 source=data_source,
