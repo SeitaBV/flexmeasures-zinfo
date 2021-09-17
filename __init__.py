@@ -122,9 +122,12 @@ def import_sensor_data(dryrun: bool = False):
                 )
                 continue
             sensor = sensor_dict[sensor_name]
-            df_sensor = df.query(
-                f"{zinfo_sensor_name_field} == '{zinfo_sensor_name}'"
-            ).droplevel(zinfo_sensor_name_field)[zinfo_event_value_field]
+            df_sensor = df.loc[
+                (
+                    df.index.get_level_values(zinfo_sensor_name_field)
+                    == zinfo_sensor_name
+                )
+            ].droplevel(zinfo_sensor_name_field)[zinfo_event_value_field]
 
             # required by timely_beliefs, TODO: check if that still is the case, see https://github.com/SeitaBV/timely-beliefs/issues/64
             df_sensor.index.name = "event_start"
