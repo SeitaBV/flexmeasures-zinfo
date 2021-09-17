@@ -152,10 +152,6 @@ def ensure_zinfo_sensors() -> List[Sensor]:
             "generic_asset_name"
         ]
         sensor_name = zinfo_sensor_mapping[zinfo_sensor_name]["sensor_name"]
-        unit = zinfo_sensor_mapping[zinfo_sensor_name]["unit"]
-        timezone = zinfo_sensor_mapping[zinfo_sensor_name]["timezone"]
-        resolution = zinfo_sensor_mapping[zinfo_sensor_name]["resolution"]
-
         sensor = (
             Sensor.query.join(GenericAsset)
             .filter(
@@ -167,6 +163,9 @@ def ensure_zinfo_sensors() -> List[Sensor]:
         )
         if sensor is None:
             current_app.logger.info(f"Adding sensor {sensor_name} ...")
+            unit = zinfo_sensor_mapping[zinfo_sensor_name]["unit"]
+            timezone = zinfo_sensor_mapping[zinfo_sensor_name]["timezone"]
+            resolution = zinfo_sensor_mapping[zinfo_sensor_name]["resolution"]
             generic_asset = GenericAsset.query.filter(
                 GenericAsset.name == generic_asset_name
             ).one_or_none()
