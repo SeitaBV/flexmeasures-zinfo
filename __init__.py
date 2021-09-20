@@ -129,22 +129,7 @@ def import_sensor_data(dryrun: bool = False):
                 )
             ].droplevel(zinfo_sensor_name_field)[zinfo_event_value_field]
 
-            # required by timely_beliefs, TODO: check if that still is the case, see https://github.com/SeitaBV/timely-beliefs/issues/64
-            df_sensor.index.name = "event_start"
-            df_sensor.name = "event_value"
-
-            bdf = BeliefsDataFrame(
-                df_sensor,
-                source=data_source,
-                sensor=sensor,
-                belief_time=now,
-            )
-
-            # Drop beliefs that haven't changed
-            bdf = drop_unchanged_beliefs(bdf)
-
-            # TODO: evaluate some traits of the data via FlexMeasures, see https://github.com/SeitaBV/flexmeasures-entsoe/issues/3
-            save_to_db(bdf)
+            save_new_beliefs(df_sensor, data_source, sensor, now)
 
         # Save derived sensors
         sensors = ensure_zinfo_derived_sensors()
@@ -165,22 +150,26 @@ def import_sensor_data(dryrun: bool = False):
             )
             df_sensor = df_sensor[zinfo_event_value_field]
 
-            # required by timely_beliefs, TODO: check if that still is the case, see https://github.com/SeitaBV/timely-beliefs/issues/64
-            df_sensor.index.name = "event_start"
-            df_sensor.name = "event_value"
+            save_new_beliefs(df_sensor, data_source, sensor, now)
 
-            bdf = BeliefsDataFrame(
-                df_sensor,
-                source=data_source,
-                sensor=sensor,
-                belief_time=now,
-            )
 
-            # Drop beliefs that haven't changed
-            bdf = drop_unchanged_beliefs(bdf)
+def save_new_beliefs(df_sensor, data_source, sensor, belief_time) -> BeliefsDataFrame:
+    # required by timely_beliefs, TODO: check if that still is the case, see https://github.com/SeitaBV/timely-beliefs/issues/64
+    df_sensor.index.name = "event_start"
+    df_sensor.name = "event_value"
 
-            # TODO: evaluate some traits of the data via FlexMeasures, see https://github.com/SeitaBV/flexmeasures-entsoe/issues/3
-            save_to_db(bdf)
+    bdf = BeliefsDataFrame(
+        df_sensor,
+        source=data_source,
+        sensor=sensor,
+        belief_time=belief_time,
+    )
+
+    # Drop beliefs that haven't changed
+    bdf = drop_unchanged_beliefs(bdf)
+
+    # TODO: evaluate some traits of the data via FlexMeasures, see https://github.com/SeitaBV/flexmeasures-entsoe/issues/3
+    save_to_db(bdf)
 
 
 def apply_pandas_method_kwargs(
