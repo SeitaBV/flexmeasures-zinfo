@@ -4,7 +4,7 @@ import os
 import sys
 from datetime import datetime
 from pytz import utc
-from typing import List
+from typing import List, Tuple
 
 import click
 from flask import Blueprint, current_app
@@ -101,9 +101,9 @@ def import_sensor_data(dryrun: bool = False):
                 f"Missing Z-info sensor name {zinfo_sensor_name} in your ZINFO_SENSOR_MAPPING config setting."
             )
             continue
-        method_kwargs = zinfo_sensor_mapping[zinfo_sensor_name]["pandas_method_kwargs"]
-        for method, kwargs in method_kwargs:
-            df_sensor = getattr(df_sensor, method)(**kwargs)
+        df_sensor = apply_pandas_method_kwargs(
+            df_sensor, zinfo_sensor_mapping[zinfo_sensor_name]["pandas_method_kwargs"]
+        )
         df_sensors.append(df_sensor)
     df = pd.concat(df_sensors, axis=0)
 
@@ -160,9 +160,9 @@ def import_sensor_data(dryrun: bool = False):
                     == zinfo_sensor_name
                 )
             df_sensor = df.loc[mask]
-            method_kwargs = sensor.pandas_method_kwargs
-            for method, kwargs in method_kwargs:
-                df_sensor = getattr(df_sensor, method)(**kwargs)
+            df_sensor = apply_pandas_method_kwargs(
+                df_sensor, sensor.pandas_method_kwargs
+            )
             df_sensor = df_sensor[zinfo_event_value_field]
 
             # required by timely_beliefs, TODO: check if that still is the case, see https://github.com/SeitaBV/timely-beliefs/issues/64
@@ -181,6 +181,26 @@ def import_sensor_data(dryrun: bool = False):
 
             # TODO: evaluate some traits of the data via FlexMeasures, see https://github.com/SeitaBV/flexmeasures-entsoe/issues/3
             save_to_db(bdf)
+
+
+def apply_pandas_method_kwargs(
+    df: pd.DataFrame, pandas_method_kwargs: List[Tuple[str, dict]]
+) -> pd.DataFrame:
+    """Convert the data frame using the given list.
+
+    The conversion is defined using `pandas_method_kwargs`,
+    which lists method/kwargs tuples that are called in the specified order.
+    The example below converts from hourly meter readings in kWh to electricity demand in kW.
+
+        pandas_method_kwargs=[
+            ("diff", dict()),
+            ("shift", dict(periods=-1)),
+            ("head", dict(n=-1)),
+        ],
+    """
+    for method, kwargs in pandas_method_kwargs:
+        df = getattr(df, method)(**kwargs)
+    return df
 
 
 def ensure_zinfo_derived_sensors() -> List[Sensor]:
