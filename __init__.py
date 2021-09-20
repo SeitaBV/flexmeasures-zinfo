@@ -1,4 +1,4 @@
-__version__ = "0.2"
+__version__ = "0.3"
 
 import os
 import sys
@@ -108,9 +108,9 @@ def import_sensor_data(dryrun: bool = False):
     df = pd.concat(df_sensors, axis=0)
 
     if not dryrun:
-        # Save
+        # Save main sensors
         data_source = ensure_data_source(name="Z-info", type="crawling script")
-        sensors = ensure_zinfo_sensors()
+        sensors = ensure_zinfo_main_sensors()
         sensor_dict = {sensor.name: sensor for sensor in sensors}
         for zinfo_sensor_name in zinfo_sensor_names_received:
             if zinfo_sensor_name not in zinfo_sensor_mapping:
@@ -146,8 +146,89 @@ def import_sensor_data(dryrun: bool = False):
             # TODO: evaluate some traits of the data via FlexMeasures, see https://github.com/SeitaBV/flexmeasures-entsoe/issues/3
             save_to_db(bdf)
 
+        # Save derived sensors
+        sensors = ensure_zinfo_derived_sensors()
+        for sensor in sensors:
+            zinfo_sensor_name = sensor.zinfo_sensor_name
+            if isinstance(zinfo_sensor_name, list):
+                mask = df.index.get_level_values(zinfo_sensor_name_field).isin(
+                    zinfo_sensor_name
+                )
+            else:
+                mask = (
+                    df.index.get_level_values(zinfo_sensor_name_field)
+                    == zinfo_sensor_name
+                )
+            df_sensor = df.loc[mask]
+            method_kwargs = sensor.pandas_method_kwargs
+            for method, kwargs in method_kwargs:
+                df_sensor = getattr(df_sensor, method)(**kwargs)
+            df_sensor = df_sensor[zinfo_event_value_field]
 
-def ensure_zinfo_sensors() -> List[Sensor]:
+            # required by timely_beliefs, TODO: check if that still is the case, see https://github.com/SeitaBV/timely-beliefs/issues/64
+            df_sensor.index.name = "event_start"
+            df_sensor.name = "event_value"
+
+            bdf = BeliefsDataFrame(
+                df_sensor,
+                source=data_source,
+                sensor=sensor,
+                belief_time=now,
+            )
+
+            # Drop beliefs that haven't changed
+            bdf = drop_unchanged_beliefs(bdf)
+
+            # TODO: evaluate some traits of the data via FlexMeasures, see https://github.com/SeitaBV/flexmeasures-entsoe/issues/3
+            save_to_db(bdf)
+
+
+def ensure_zinfo_derived_sensors() -> List[Sensor]:
+    """Set up derived sensors."""
+    sensors = []
+    zinfo_derived_sensors = current_app.config.get("ZINFO_DERIVED_SENSORS", [])
+    for sensor_description in zinfo_derived_sensors:
+        generic_asset_name = sensor_description["generic_asset_name"]
+        sensor_name = sensor_description["fm_sensor_name"]
+        sensor = (
+            Sensor.query.join(GenericAsset)
+            .filter(
+                Sensor.name == sensor_name,
+                Sensor.generic_asset_id == GenericAsset.id,
+                GenericAsset.name == generic_asset_name,
+            )
+            .one_or_none()
+        )
+        if sensor is None:
+            current_app.logger.info(f"Adding sensor {sensor_name} ...")
+            unit = sensor_description["unit"]
+            timezone = sensor_description["timezone"]
+            resolution = sensor_description["resolution"]
+            generic_asset = GenericAsset.query.filter(
+                GenericAsset.name == generic_asset_name
+            ).one_or_none()
+            if generic_asset is None:
+                current_app.logger.error(
+                    f"Missing generic asset {generic_asset_name}. First set it up with the FlexMeasures CLI."
+                )
+                continue
+            sensor = Sensor(
+                name=sensor_name,
+                unit=unit,
+                generic_asset=generic_asset,
+                timezone=timezone,
+                event_resolution=resolution,
+            )
+            db.session.add(sensor)
+        sensor.zinfo_sensor_name = sensor_description["zinfo_sensor_name"]
+        sensor.pandas_method_kwargs = sensor_description["pandas_method_kwargs"]
+        sensors.append(sensor)
+    db.session.commit()
+    return sensors
+
+
+def ensure_zinfo_main_sensors() -> List[Sensor]:
+    """Set up main sensors."""
     zinfo_sensor_mapping = current_app.config.get("ZINFO_SENSOR_MAPPING", {})
     sensors = []
     for zinfo_sensor_name in zinfo_sensor_mapping:
