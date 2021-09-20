@@ -139,16 +139,23 @@ def import_sensor_data(dryrun: bool = False):
                 mask = df.index.get_level_values(zinfo_sensor_name_field).isin(
                     zinfo_sensor_name
                 )
+                df_sensor = df.loc[mask]
+                df_sensor = apply_pandas_method_kwargs(
+                    df_sensor, sensor.pandas_method_kwargs
+                )
+                df_sensor = df_sensor[zinfo_event_value_field]
             else:
                 mask = (
                     df.index.get_level_values(zinfo_sensor_name_field)
                     == zinfo_sensor_name
                 )
-            df_sensor = df.loc[mask]
-            df_sensor = apply_pandas_method_kwargs(
-                df_sensor, sensor.pandas_method_kwargs
-            )
-            df_sensor = df_sensor[zinfo_event_value_field]
+                df_sensor = df.loc[mask]
+                df_sensor = apply_pandas_method_kwargs(
+                    df_sensor, sensor.pandas_method_kwargs
+                )
+                df_sensor = df_sensor.droplevel(zinfo_sensor_name_field)[
+                    zinfo_event_value_field
+                ]
 
             save_new_beliefs(df_sensor, data_source, sensor, now)
 
