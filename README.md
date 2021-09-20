@@ -21,10 +21,11 @@ using the `FLEXMEASURES_PLUGIN_PATHS` setting.
 
    For example:
 
-       ZINFO_SENSOR_MAPPING = {
-           "<Z-info sensor name>": dict(
+       ZINFO_MAIN_SENSORS = [
+           dict(
+               fm_sensor_name="<FlexMeasures sensor name>",
                generic_asset_name="<FlexMeasures generic asset name>",
-               sensor_name="<FlexMeasures sensor name>",
+               zinfo_sensor_name="<Z-info sensor name>",
                unit="kW",
                timezone="Europe/Amsterdam",
                resolution=timedelta(hours=1),
@@ -34,9 +35,9 @@ using the `FLEXMEASURES_PLUGIN_PATHS` setting.
                    ("head", dict(n=-1)),
                ],
            ),
-       }
+       ]
 
-   Here, the dictionary after the <Z-info sensor name> defines how to set up the corresponding sensor,
+   Here, each dictionary in the list defines how to set up a FlexMeasures sensor corresponding to a Z-info sensor,
    as well as how to convert Z-info values to FlexMeasures time series.
    
    The conversion is defined using `pandas_method_kwargs`, which lists method/kwargs tuples that are called in the specified order.

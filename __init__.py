@@ -87,7 +87,13 @@ def import_sensor_data(dryrun: bool = False):
     )
 
     # Convert from meter data per Z-info sensor name (e.g. meterstanden) to time series data per FlexMeasures sensor
-    zinfo_sensor_mapping: dict = current_app.config.get("ZINFO_SENSOR_MAPPING", {})
+    zinfo_main_sensors: List[dict] = current_app.config.get("ZINFO_MAIN_SENSORS", {})
+    zinfo_sensor_mapping = {
+        sensor_description["zinfo_sensor_name"]: {
+            k: v for k, v in sensor_description.items() if k != "zinfo_sensor_name"
+        }
+        for sensor_description in zinfo_main_sensors
+    }
     zinfo_sensor_names_received: List[str] = df.index.get_level_values(
         zinfo_sensor_name_field
     ).unique()
@@ -98,7 +104,7 @@ def import_sensor_data(dryrun: bool = False):
         ]
         if zinfo_sensor_name not in zinfo_sensor_mapping:
             current_app.logger.error(
-                f"Missing Z-info sensor name {zinfo_sensor_name} in your ZINFO_SENSOR_MAPPING config setting."
+                f"Missing Z-info sensor name {zinfo_sensor_name} in your ZINFO_MAIN_SENSORS config setting."
             )
             continue
         df_sensor = apply_pandas_method_kwargs(
@@ -110,12 +116,12 @@ def import_sensor_data(dryrun: bool = False):
     if not dryrun:
         # Save main sensors
         data_source = ensure_data_source(name="Z-info", type="crawling script")
-        sensors = ensure_zinfo_main_sensors()
+        sensors = ensure_zinfo_sensors(current_app.config.get("ZINFO_MAIN_SENSORS", {}))
         sensor_dict = {sensor.name: sensor for sensor in sensors}
         for zinfo_sensor_name in zinfo_sensor_names_received:
             if zinfo_sensor_name not in zinfo_sensor_mapping:
                 continue
-            sensor_name = zinfo_sensor_mapping[zinfo_sensor_name]["sensor_name"]
+            sensor_name = zinfo_sensor_mapping[zinfo_sensor_name]["fm_sensor_name"]
             if sensor_name not in sensor_dict:
                 current_app.logger.error(
                     f"No sensor set up for Z-info sensor name {zinfo_sensor_name} ..."
@@ -132,7 +138,9 @@ def import_sensor_data(dryrun: bool = False):
             save_new_beliefs(df_sensor, data_source, sensor, now)
 
         # Save derived sensors
-        sensors = ensure_zinfo_derived_sensors()
+        sensors = ensure_zinfo_sensors(
+            current_app.config.get("ZINFO_DERIVED_SENSORS", [])
+        )
         for sensor in sensors:
             zinfo_sensor_name = sensor.zinfo_sensor_name
             if isinstance(zinfo_sensor_name, list):
@@ -199,11 +207,10 @@ def apply_pandas_method_kwargs(
     return df
 
 
-def ensure_zinfo_derived_sensors() -> List[Sensor]:
-    """Set up derived sensors."""
+def ensure_zinfo_sensors(zinfo_sensors: List[dict]) -> List[Sensor]:
+    """Set up sensors."""
     sensors = []
-    zinfo_derived_sensors = current_app.config.get("ZINFO_DERIVED_SENSORS", [])
-    for sensor_description in zinfo_derived_sensors:
+    for sensor_description in zinfo_sensors:
         generic_asset_name = sensor_description["generic_asset_name"]
         sensor_name = sensor_description["fm_sensor_name"]
         sensor = (
@@ -238,50 +245,6 @@ def ensure_zinfo_derived_sensors() -> List[Sensor]:
             db.session.add(sensor)
         sensor.zinfo_sensor_name = sensor_description["zinfo_sensor_name"]
         sensor.pandas_method_kwargs = sensor_description["pandas_method_kwargs"]
-        sensors.append(sensor)
-    db.session.commit()
-    return sensors
-
-
-def ensure_zinfo_main_sensors() -> List[Sensor]:
-    """Set up main sensors."""
-    zinfo_sensor_mapping = current_app.config.get("ZINFO_SENSOR_MAPPING", {})
-    sensors = []
-    for zinfo_sensor_name in zinfo_sensor_mapping:
-        generic_asset_name = zinfo_sensor_mapping[zinfo_sensor_name][
-            "generic_asset_name"
-        ]
-        sensor_name = zinfo_sensor_mapping[zinfo_sensor_name]["sensor_name"]
-        sensor = (
-            Sensor.query.join(GenericAsset)
-            .filter(
-                Sensor.name == sensor_name,
-                Sensor.generic_asset_id == GenericAsset.id,
-                GenericAsset.name == generic_asset_name,
-            )
-            .one_or_none()
-        )
-        if sensor is None:
-            current_app.logger.info(f"Adding sensor {sensor_name} ...")
-            unit = zinfo_sensor_mapping[zinfo_sensor_name]["unit"]
-            timezone = zinfo_sensor_mapping[zinfo_sensor_name]["timezone"]
-            resolution = zinfo_sensor_mapping[zinfo_sensor_name]["resolution"]
-            generic_asset = GenericAsset.query.filter(
-                GenericAsset.name == generic_asset_name
-            ).one_or_none()
-            if generic_asset is None:
-                current_app.logger.error(
-                    f"Missing generic asset {generic_asset_name}. First set it up with the FlexMeasures CLI."
-                )
-                continue
-            sensor = Sensor(
-                name=sensor_name,
-                unit=unit,
-                generic_asset=generic_asset,
-                timezone=timezone,
-                event_resolution=resolution,
-            )
-            db.session.add(sensor)
         sensors.append(sensor)
     db.session.commit()
     return sensors
