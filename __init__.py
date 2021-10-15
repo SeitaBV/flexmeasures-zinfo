@@ -39,7 +39,7 @@ zinfo_bp.cli.help = "Z-info Data commands"
     help="In Dry run, do not save the data to the db.",
 )
 @with_appcontext
-@task_with_status_report
+@task_with_status_report("zinfo-import-sensor-data")
 def import_sensor_data(dryrun: bool = False):
     """
     Import sensor data from Z-info.
