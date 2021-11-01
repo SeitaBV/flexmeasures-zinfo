@@ -76,22 +76,10 @@ def import_sensor_data(dryrun: bool = False):
     df = pd.DataFrame(values)
     df = df.iloc[::-1]  # switch order of values so that they run from past to present
     df[zinfo_event_value_field] = pd.to_numeric(df[zinfo_event_value_field])
-
-    # Try inferring ambiguous local times, and otherwise skip them
-    try:
-        df[zinfo_event_end_field] = (
-            pd.to_datetime(df[zinfo_event_end_field])
-            .dt.tz_localize(ZINFO_TIMEZONE, ambiguous="infer")
-            .dt.tz_convert(utc)
-        )
-    except AmbiguousTimeError as e:
-        current_app.logger.error(f"Skipping ambiguous times due to a problem: {e} ...")
-        df[zinfo_event_end_field] = (
-            pd.to_datetime(df[zinfo_event_end_field])
-            .dt.tz_localize(ZINFO_TIMEZONE, ambiguous="NaT")
-            .dt.tz_convert(utc)
-        )
-        df = df[~df[zinfo_event_end_field].isna()]
+    df[zinfo_event_end_field] = localize_time_series(
+        df[zinfo_event_end_field], ZINFO_TIMEZONE
+    )
+    df = df[~df[zinfo_event_end_field].isna()]
     df = (
         df.set_index([zinfo_event_end_field, zinfo_sensor_name_field])
         .sort_index()[zinfo_event_value_field]
@@ -178,6 +166,23 @@ def import_sensor_data(dryrun: bool = False):
                 ]
 
             save_new_beliefs(df_sensor, data_source, sensor, now)
+
+
+def localize_time_series(s: pd.Series, timezone: str) -> pd.Series:
+    """Try inferring ambiguous local times, and otherwise skip them."""
+    try:
+        return (
+            pd.to_datetime(s)
+            .dt.tz_localize(timezone, ambiguous="infer")
+            .dt.tz_convert(utc)
+        )
+    except AmbiguousTimeError as e:
+        current_app.logger.error(f"Skipping ambiguous times due to a problem: {e} ...")
+        return (
+            pd.to_datetime(s)
+            .dt.tz_localize(timezone, ambiguous="NaT")
+            .dt.tz_convert(utc)
+        )
 
 
 def save_new_beliefs(df_sensor, data_source, sensor, belief_time) -> BeliefsDataFrame:
