@@ -4,6 +4,7 @@ import os
 import sys
 from datetime import datetime
 from pytz import utc
+from pytz.exceptions import AmbiguousTimeError
 from typing import List, Tuple
 
 import click
@@ -75,11 +76,20 @@ def import_sensor_data(dryrun: bool = False):
     df = pd.DataFrame(values)
     df = df.iloc[::-1]  # switch order of values so that they run from past to present
     df[zinfo_event_value_field] = pd.to_numeric(df[zinfo_event_value_field])
-    df[zinfo_event_end_field] = (
-        pd.to_datetime(df[zinfo_event_end_field])
-        .dt.tz_localize(ZINFO_TIMEZONE, ambiguous="infer")
-        .dt.tz_convert(utc)
-    )
+    try:
+        df[zinfo_event_end_field] = (
+            pd.to_datetime(df[zinfo_event_end_field])
+            .dt.tz_localize(ZINFO_TIMEZONE, ambiguous="infer")
+            .dt.tz_convert(utc)
+        )
+    except AmbiguousTimeError as e:
+        current_app.logger.error(f"Skipping ambiguous times due to a problem: {e} ...")
+        df[zinfo_event_end_field] = (
+            pd.to_datetime(df[zinfo_event_end_field])
+            .dt.tz_localize(ZINFO_TIMEZONE, ambiguous="NaT")
+            .dt.tz_convert(utc)
+        )
+        df = df[~df[zinfo_event_end_field].isna()]
     df = (
         df.set_index([zinfo_event_end_field, zinfo_sensor_name_field])
         .sort_index()[zinfo_event_value_field]
