@@ -76,6 +76,8 @@ def import_sensor_data(dryrun: bool = False):
     df = pd.DataFrame(values)
     df = df.iloc[::-1]  # switch order of values so that they run from past to present
     df[zinfo_event_value_field] = pd.to_numeric(df[zinfo_event_value_field])
+
+    # Try inferring ambiguous local times, and otherwise skip them
     try:
         df[zinfo_event_end_field] = (
             pd.to_datetime(df[zinfo_event_end_field])
