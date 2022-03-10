@@ -78,7 +78,9 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
 
         # Parse response
         df = pd.DataFrame(values)
-        df = df.iloc[::-1]  # switch order of values so that they run from past to present
+        df = df.iloc[
+            ::-1
+        ]  # switch order of values so that they run from past to present
         df[zinfo_event_value_field] = pd.to_numeric(df[zinfo_event_value_field])
         df[zinfo_event_end_field] = localize_time_series(
             df[zinfo_event_end_field], ZINFO_TIMEZONE
@@ -91,7 +93,9 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
         )
 
         # Convert from meter data per Z-info sensor name (e.g. meterstanden) to time series data per FlexMeasures sensor
-        zinfo_main_sensors: List[dict] = current_app.config.get("ZINFO_MAIN_SENSORS", {})
+        zinfo_main_sensors: List[dict] = current_app.config.get(
+            "ZINFO_MAIN_SENSORS", {}
+        )
         zinfo_sensor_mapping = {
             sensor_description["zinfo_sensor_name"]: {
                 k: v for k, v in sensor_description.items() if k != "zinfo_sensor_name"
@@ -112,7 +116,8 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
                 )
                 continue
             df_sensor = apply_pandas_method_kwargs(
-                df_sensor, zinfo_sensor_mapping[zinfo_sensor_name]["pandas_method_kwargs"]
+                df_sensor,
+                zinfo_sensor_mapping[zinfo_sensor_name]["pandas_method_kwargs"],
             )
             df_sensors.append(df_sensor)
         df = pd.concat(df_sensors, axis=0)
@@ -120,7 +125,9 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
         if not dryrun:
             # Save main sensors
             data_source = ensure_data_source(name="Z-info", type="crawling script")
-            sensors = ensure_zinfo_sensors(current_app.config.get("ZINFO_MAIN_SENSORS", {}))
+            sensors = ensure_zinfo_sensors(
+                current_app.config.get("ZINFO_MAIN_SENSORS", {})
+            )
             sensor_dict = {sensor.name: sensor for sensor in sensors}
             for zinfo_sensor_name in zinfo_sensor_names_received:
                 if zinfo_sensor_name not in zinfo_sensor_mapping:
