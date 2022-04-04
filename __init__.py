@@ -10,7 +10,7 @@ from typing import List, Tuple
 import click
 from flask import Blueprint, current_app
 from flask.cli import with_appcontext
-from flexmeasures.api.common.utils.api_utils import save_to_db
+from flexmeasures.data.utils import save_to_db
 from flexmeasures.data.config import db
 from flexmeasures.data.models.data_sources import DataSource
 from flexmeasures.data.models.generic_assets import GenericAsset
@@ -212,7 +212,8 @@ def save_new_beliefs(df_sensor, data_source, sensor, belief_time) -> BeliefsData
     bdf = drop_unchanged_beliefs(bdf)
 
     # TODO: evaluate some traits of the data via FlexMeasures, see https://github.com/SeitaBV/flexmeasures-entsoe/issues/3
-    save_to_db(bdf)
+    status = save_to_db(bdf)
+    current_app.logger.info(f"Saved with status: {status} ...")
 
 
 def apply_pandas_method_kwargs(
