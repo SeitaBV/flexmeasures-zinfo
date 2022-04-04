@@ -35,21 +35,24 @@ zinfo_bp.cli.help = "Z-info Data commands"
 
 @zinfo_bp.cli.command("import-sensor-data")
 @click.option(
+    "--spcid",
+    "zinfo_spcids",
+    required=True,
+    multiple=True,
+    help="Which Z-info specification ID(s) to use.",
+)
+@click.option(
     "--dryrun/--no-dryrun",
     default=False,
     help="In Dry run, do not save the data to the db.",
 )
 @with_appcontext
 @task_with_status_report("zinfo-import-sensor-data")
-def import_sensor_data(dryrun: bool = False):
+def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
     """
-    Import sensor data from Z-info.
+    Import sensor data from Z-info, given at least one specification ID.
     """
     access_token = get_access_token()
-    zinfo_spcid = current_app.config.get("ZINFO_SPCID", None)
-    if not zinfo_spcid:
-        click.echo("ZINFO_SPCID setting is not given!")
-        raise click.Abort
     zinfo_event_end_field = current_app.config.get("ZINFO_EVENT_END_FIELD", None)
     if not zinfo_event_end_field:
         click.echo("ZINFO_EVENT_END_FIELD setting is not given!")
@@ -63,109 +66,117 @@ def import_sensor_data(dryrun: bool = False):
         click.echo("ZINFO_SENSOR_NAME_FIELD setting is not given!")
         raise click.Abort
 
-    res = requests.get(
-        f"{ZINFO_API_BASE_URL}/zi_wsr.svc/JSON/NL.13/?spcid={zinfo_spcid}",
-        headers={"Authorization": access_token},
-    )
-    now = datetime.now(tz=utc)
-    response = res.json()
-    values = response.get("waarden", [])
-    current_app.logger.info(f"Got {len(values)} values...")
+    for zinfo_spcid in zinfo_spcids:
+        res = requests.get(
+            f"{ZINFO_API_BASE_URL}/zi_wsr.svc/JSON/NL.13/?spcid={zinfo_spcid}",
+            headers={"Authorization": access_token},
+        )
+        now = datetime.now(tz=utc)
+        response = res.json()
+        values = response.get("waarden", [])
+        current_app.logger.info(f"Got {len(values)} values...")
 
-    # Parse response
-    df = pd.DataFrame(values)
-    df = df.iloc[::-1]  # switch order of values so that they run from past to present
-    df[zinfo_event_value_field] = pd.to_numeric(df[zinfo_event_value_field])
-    df[zinfo_event_end_field] = localize_time_series(
-        df[zinfo_event_end_field], ZINFO_TIMEZONE
-    )
-    df = df[~df[zinfo_event_end_field].isna()]
-    df = (
-        df.set_index([zinfo_event_end_field, zinfo_sensor_name_field])
-        .sort_index()[zinfo_event_value_field]
-        .to_frame()
-    )
+        # Parse response
+        df = pd.DataFrame(values)
+        df = df.iloc[
+            ::-1
+        ]  # switch order of values so that they run from past to present
+        df[zinfo_event_value_field] = pd.to_numeric(df[zinfo_event_value_field])
+        df[zinfo_event_end_field] = localize_time_series(
+            df[zinfo_event_end_field], ZINFO_TIMEZONE
+        )
+        df = df[~df[zinfo_event_end_field].isna()]
+        df = (
+            df.set_index([zinfo_event_end_field, zinfo_sensor_name_field])
+            .sort_index()[zinfo_event_value_field]
+            .to_frame()
+        )
 
-    # Convert from meter data per Z-info sensor name (e.g. meterstanden) to time series data per FlexMeasures sensor
-    zinfo_main_sensors: List[dict] = current_app.config.get("ZINFO_MAIN_SENSORS", {})
-    zinfo_sensor_mapping = {
-        sensor_description["zinfo_sensor_name"]: {
-            k: v for k, v in sensor_description.items() if k != "zinfo_sensor_name"
+        # Convert from meter data per Z-info sensor name (e.g. meterstanden) to time series data per FlexMeasures sensor
+        zinfo_main_sensors: List[dict] = current_app.config.get(
+            "ZINFO_MAIN_SENSORS", {}
+        )
+        zinfo_sensor_mapping = {
+            sensor_description["zinfo_sensor_name"]: {
+                k: v for k, v in sensor_description.items() if k != "zinfo_sensor_name"
+            }
+            for sensor_description in zinfo_main_sensors
         }
-        for sensor_description in zinfo_main_sensors
-    }
-    zinfo_sensor_names_received: List[str] = df.index.get_level_values(
-        zinfo_sensor_name_field
-    ).unique()
-    df_sensors = []
-    for zinfo_sensor_name in zinfo_sensor_names_received:
-        df_sensor = df.loc[
-            df.index.get_level_values(zinfo_sensor_name_field) == zinfo_sensor_name
-        ]
-        if zinfo_sensor_name not in zinfo_sensor_mapping:
-            current_app.logger.error(
-                f"Missing Z-info sensor name {zinfo_sensor_name} in your ZINFO_MAIN_SENSORS config setting."
-            )
-            continue
-        df_sensor = apply_pandas_method_kwargs(
-            df_sensor, zinfo_sensor_mapping[zinfo_sensor_name]["pandas_method_kwargs"]
-        )
-        df_sensors.append(df_sensor)
-    df = pd.concat(df_sensors, axis=0)
-
-    if not dryrun:
-        # Save main sensors
-        data_source = ensure_data_source(name="Z-info", type="crawling script")
-        sensors = ensure_zinfo_sensors(current_app.config.get("ZINFO_MAIN_SENSORS", {}))
-        sensor_dict = {sensor.name: sensor for sensor in sensors}
+        zinfo_sensor_names_received: List[str] = df.index.get_level_values(
+            zinfo_sensor_name_field
+        ).unique()
+        df_sensors = []
         for zinfo_sensor_name in zinfo_sensor_names_received:
-            if zinfo_sensor_name not in zinfo_sensor_mapping:
-                continue
-            sensor_name = zinfo_sensor_mapping[zinfo_sensor_name]["fm_sensor_name"]
-            if sensor_name not in sensor_dict:
-                current_app.logger.error(
-                    f"No sensor set up for Z-info sensor name {zinfo_sensor_name} ..."
-                )
-                continue
-            sensor = sensor_dict[sensor_name]
             df_sensor = df.loc[
-                (
-                    df.index.get_level_values(zinfo_sensor_name_field)
-                    == zinfo_sensor_name
+                df.index.get_level_values(zinfo_sensor_name_field) == zinfo_sensor_name
+            ]
+            if zinfo_sensor_name not in zinfo_sensor_mapping:
+                current_app.logger.error(
+                    f"Missing Z-info sensor name {zinfo_sensor_name} in your ZINFO_MAIN_SENSORS config setting."
                 )
-            ].droplevel(zinfo_sensor_name_field)[zinfo_event_value_field]
+                continue
+            df_sensor = apply_pandas_method_kwargs(
+                df_sensor,
+                zinfo_sensor_mapping[zinfo_sensor_name]["pandas_method_kwargs"],
+            )
+            df_sensors.append(df_sensor)
+        df = pd.concat(df_sensors, axis=0)
 
-            save_new_beliefs(df_sensor, data_source, sensor, now)
+        if not dryrun:
+            # Save main sensors
+            data_source = ensure_data_source(name="Z-info", type="crawling script")
+            sensors = ensure_zinfo_sensors(
+                current_app.config.get("ZINFO_MAIN_SENSORS", {})
+            )
+            sensor_dict = {sensor.name: sensor for sensor in sensors}
+            for zinfo_sensor_name in zinfo_sensor_names_received:
+                if zinfo_sensor_name not in zinfo_sensor_mapping:
+                    continue
+                sensor_name = zinfo_sensor_mapping[zinfo_sensor_name]["fm_sensor_name"]
+                if sensor_name not in sensor_dict:
+                    current_app.logger.error(
+                        f"No sensor set up for Z-info sensor name {zinfo_sensor_name} ..."
+                    )
+                    continue
+                sensor = sensor_dict[sensor_name]
+                df_sensor = df.loc[
+                    (
+                        df.index.get_level_values(zinfo_sensor_name_field)
+                        == zinfo_sensor_name
+                    )
+                ].droplevel(zinfo_sensor_name_field)[zinfo_event_value_field]
 
-        # Save derived sensors
-        sensors = ensure_zinfo_sensors(
-            current_app.config.get("ZINFO_DERIVED_SENSORS", [])
-        )
-        for sensor in sensors:
-            zinfo_sensor_name = sensor.zinfo_sensor_name
-            if isinstance(zinfo_sensor_name, list):
-                mask = df.index.get_level_values(zinfo_sensor_name_field).isin(
-                    zinfo_sensor_name
-                )
-                df_sensor = df.loc[mask]
-                df_sensor = apply_pandas_method_kwargs(
-                    df_sensor, sensor.pandas_method_kwargs
-                )
-                df_sensor = df_sensor[zinfo_event_value_field]
-            else:
-                mask = (
-                    df.index.get_level_values(zinfo_sensor_name_field)
-                    == zinfo_sensor_name
-                )
-                df_sensor = df.loc[mask]
-                df_sensor = apply_pandas_method_kwargs(
-                    df_sensor, sensor.pandas_method_kwargs
-                )
-                df_sensor = df_sensor.droplevel(zinfo_sensor_name_field)[
-                    zinfo_event_value_field
-                ]
+                save_new_beliefs(df_sensor, data_source, sensor, now)
 
-            save_new_beliefs(df_sensor, data_source, sensor, now)
+            # Save derived sensors
+            sensors = ensure_zinfo_sensors(
+                current_app.config.get("ZINFO_DERIVED_SENSORS", [])
+            )
+            for sensor in sensors:
+                zinfo_sensor_name = sensor.zinfo_sensor_name
+                if isinstance(zinfo_sensor_name, list):
+                    mask = df.index.get_level_values(zinfo_sensor_name_field).isin(
+                        zinfo_sensor_name
+                    )
+                    df_sensor = df.loc[mask]
+                    df_sensor = apply_pandas_method_kwargs(
+                        df_sensor, sensor.pandas_method_kwargs
+                    )
+                    df_sensor = df_sensor[zinfo_event_value_field]
+                else:
+                    mask = (
+                        df.index.get_level_values(zinfo_sensor_name_field)
+                        == zinfo_sensor_name
+                    )
+                    df_sensor = df.loc[mask]
+                    df_sensor = apply_pandas_method_kwargs(
+                        df_sensor, sensor.pandas_method_kwargs
+                    )
+                    df_sensor = df_sensor.droplevel(zinfo_sensor_name_field)[
+                        zinfo_event_value_field
+                    ]
+
+                save_new_beliefs(df_sensor, data_source, sensor, now)
 
 
 def localize_time_series(s: pd.Series, timezone: str) -> pd.Series:

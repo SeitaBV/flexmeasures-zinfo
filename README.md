@@ -7,7 +7,7 @@ Importing data from [Z-Info](https://www.z-info.nl) into FlexMeasures.
 
 Importing sensor data:
 
-    flexmeasures zinfo import-sensor-data
+    flexmeasures zinfo import-sensor-data --spcid <your-zinfo-specification-id>
 
 
 ## Installation
@@ -15,7 +15,7 @@ Importing sensor data:
 1. Add the path to this directory to your FlexMeasures (>v0.6.1) config file,
 using the `FLEXMEASURES_PLUGIN_PATHS` setting.
 
-2. Add `ZINFO_USERNAME`, `ZINFO_PASSWORD`, `ZINFO_SPCID`, `ZINFO_EVENT_END_FIELD`, `ZINFO_EVENT_VALUE_FIELD` and `ZINFO_SENSOR_NAME_FIELD` to your FlexMeasures config (e.g. ~/.flexmeasures.cfg).
+2. Add `ZINFO_USERNAME`, `ZINFO_PASSWORD`, `ZINFO_EVENT_END_FIELD`, `ZINFO_EVENT_VALUE_FIELD` and `ZINFO_SENSOR_NAME_FIELD` to your FlexMeasures config (e.g. ~/.flexmeasures.cfg).
 
 3. Configure the sensor IDs and their FlexMeasures counterpart:
 
