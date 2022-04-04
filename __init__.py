@@ -39,7 +39,7 @@ zinfo_bp.cli.help = "Z-info Data commands"
     "zinfo_spcids",
     required=True,
     multiple=True,
-    help="Which Z-info specification id to use.",
+    help="Which Z-info specification ID(s) to use.",
 )
 @click.option(
     "--dryrun/--no-dryrun",
