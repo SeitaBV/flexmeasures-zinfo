@@ -12,7 +12,7 @@ Importing sensor data:
 
 ## Installation
 
-1. Add the path to this directory to your FlexMeasures (>v0.6.1) config file,
+1. Add the path to this directory to your FlexMeasures (>=v0.9) config file,
 using the `FLEXMEASURES_PLUGIN_PATHS` setting.
 
 2. Add `ZINFO_USERNAME`, `ZINFO_PASSWORD`, `ZINFO_EVENT_END_FIELD`, `ZINFO_EVENT_VALUE_FIELD` and `ZINFO_SENSOR_NAME_FIELD` to your FlexMeasures config (e.g. ~/.flexmeasures.cfg).
