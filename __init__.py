@@ -133,17 +133,22 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
             sensors = ensure_zinfo_sensors(
                 current_app.config.get("ZINFO_MAIN_SENSORS", {})
             )
-            sensor_dict = {sensor.name: sensor for sensor in sensors}
+            sensor_dict = {
+                (sensor.generic_asset.name, sensor.name): sensor for sensor in sensors
+            }
             for zinfo_sensor_name in zinfo_sensor_names_received:
                 if zinfo_sensor_name not in zinfo_sensor_mapping:
                     continue
                 sensor_name = zinfo_sensor_mapping[zinfo_sensor_name]["fm_sensor_name"]
-                if sensor_name not in sensor_dict:
+                asset_name = zinfo_sensor_mapping[zinfo_sensor_name][
+                    "generic_asset_name"
+                ]
+                if (asset_name, sensor_name) not in sensor_dict:
                     current_app.logger.error(
                         f"No sensor set up for Z-info sensor name {zinfo_sensor_name} ..."
                     )
                     continue
-                sensor = sensor_dict[sensor_name]
+                sensor = sensor_dict[(asset_name, sensor_name)]
                 df_sensor = df.loc[
                     (
                         df.index.get_level_values(zinfo_sensor_name_field)
@@ -218,7 +223,7 @@ def save_new_beliefs(df_sensor, data_source, sensor, belief_time) -> BeliefsData
 
     # TODO: evaluate some traits of the data via FlexMeasures, see https://github.com/SeitaBV/flexmeasures-entsoe/issues/3
     status = save_to_db(bdf)
-    current_app.logger.info(f"Saved with status: {status} ...")
+    current_app.logger.info(f"Saved data for {bdf.sensor} with status: {status} ...")
 
 
 def apply_pandas_method_kwargs(
