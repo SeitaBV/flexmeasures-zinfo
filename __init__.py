@@ -91,6 +91,12 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
             .sort_index()[zinfo_event_value_field]
             .to_frame()
         )
+        zinfo_sensor_names_received: List[str] = (
+            df.index.get_level_values(zinfo_sensor_name_field).unique().tolist()
+        )
+        current_app.logger.info(
+            f"Received data for the following Z-info sensors: {zinfo_sensor_names_received}."
+        )
 
         # Convert from meter data per Z-info sensor name (e.g. meterstanden) to time series data per FlexMeasures sensor
         zinfo_main_sensors: List[dict] = current_app.config.get(
@@ -102,9 +108,8 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
             }
             for sensor_description in zinfo_main_sensors
         }
-        zinfo_sensor_names_received: List[str] = df.index.get_level_values(
-            zinfo_sensor_name_field
-        ).unique()
+
+        # Convert data according to sensor configuration
         df_sensors = []
         for zinfo_sensor_name in zinfo_sensor_names_received:
             df_sensor = df.loc[
