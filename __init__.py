@@ -1,4 +1,4 @@
-__version__ = "0.3"
+__version__ = "0.4"
 
 import os
 import sys
@@ -10,7 +10,7 @@ from typing import List, Tuple
 import click
 from flask import Blueprint, current_app
 from flask.cli import with_appcontext
-from flexmeasures.api.common.utils.api_utils import save_to_db
+from flexmeasures.data.utils import save_to_db
 from flexmeasures.data.config import db
 from flexmeasures.data.models.data_sources import DataSource
 from flexmeasures.data.models.generic_assets import GenericAsset
@@ -91,6 +91,12 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
             .sort_index()[zinfo_event_value_field]
             .to_frame()
         )
+        zinfo_sensor_names_received: List[str] = (
+            df.index.get_level_values(zinfo_sensor_name_field).unique().tolist()
+        )
+        current_app.logger.info(
+            f"Received data for the following Z-info sensors: {zinfo_sensor_names_received}."
+        )
 
         # Convert from meter data per Z-info sensor name (e.g. meterstanden) to time series data per FlexMeasures sensor
         zinfo_main_sensors: List[dict] = current_app.config.get(
@@ -102,9 +108,8 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
             }
             for sensor_description in zinfo_main_sensors
         }
-        zinfo_sensor_names_received: List[str] = df.index.get_level_values(
-            zinfo_sensor_name_field
-        ).unique()
+
+        # Convert data according to sensor configuration
         df_sensors = []
         for zinfo_sensor_name in zinfo_sensor_names_received:
             df_sensor = df.loc[
@@ -128,17 +133,22 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
             sensors = ensure_zinfo_sensors(
                 current_app.config.get("ZINFO_MAIN_SENSORS", {})
             )
-            sensor_dict = {sensor.name: sensor for sensor in sensors}
+            sensor_dict = {
+                (sensor.generic_asset.name, sensor.name): sensor for sensor in sensors
+            }
             for zinfo_sensor_name in zinfo_sensor_names_received:
                 if zinfo_sensor_name not in zinfo_sensor_mapping:
                     continue
                 sensor_name = zinfo_sensor_mapping[zinfo_sensor_name]["fm_sensor_name"]
-                if sensor_name not in sensor_dict:
+                asset_name = zinfo_sensor_mapping[zinfo_sensor_name][
+                    "generic_asset_name"
+                ]
+                if (asset_name, sensor_name) not in sensor_dict:
                     current_app.logger.error(
                         f"No sensor set up for Z-info sensor name {zinfo_sensor_name} ..."
                     )
                     continue
-                sensor = sensor_dict[sensor_name]
+                sensor = sensor_dict[(asset_name, sensor_name)]
                 df_sensor = df.loc[
                     (
                         df.index.get_level_values(zinfo_sensor_name_field)
@@ -212,7 +222,8 @@ def save_new_beliefs(df_sensor, data_source, sensor, belief_time) -> BeliefsData
     bdf = drop_unchanged_beliefs(bdf)
 
     # TODO: evaluate some traits of the data via FlexMeasures, see https://github.com/SeitaBV/flexmeasures-entsoe/issues/3
-    save_to_db(bdf)
+    status = save_to_db(bdf)
+    current_app.logger.info(f"Saved data for {bdf.sensor} with status: {status} ...")
 
 
 def apply_pandas_method_kwargs(
