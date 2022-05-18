@@ -75,6 +75,8 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
         response = res.json()
         values = response.get("waarden", [])
         current_app.logger.info(f"Got {len(values)} values...")
+        if len(values) == 0:
+            return
 
         # Parse response
         df = pd.DataFrame(values)
