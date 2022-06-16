@@ -1,4 +1,5 @@
 import os
+import yaml
 from datetime import datetime, timedelta
 
 from flask import current_app
@@ -50,3 +51,12 @@ def get_access_token() -> str:
         pickle.dump([access_token, valid_until], f)
 
     return access_token
+
+
+def log_notifications(response):
+    """Log notifications, if any."""
+    notifications = response.get("meldingen", [])
+    if notifications:
+        current_app.logger.info(
+            f"Got {len(notifications)} notifications from Z-info:\n{yaml.dump(notifications, indent=4)}"
+        )
