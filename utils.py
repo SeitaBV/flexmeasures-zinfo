@@ -58,5 +58,5 @@ def log_notifications(response):
     notifications = response.get("meldingen", [])
     if notifications:
         current_app.logger.info(
-            f"Got {len(notifications)} notifications:\n{yaml.dump(notifications, indent=4)}"
+            f"Got {len(notifications)} notifications from Z-info:\n{yaml.dump(notifications, indent=4)}"
         )
