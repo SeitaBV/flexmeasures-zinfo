@@ -1,5 +1,6 @@
 __version__ = "0.6"
 
+import json
 import os
 import sys
 from datetime import datetime
@@ -73,6 +74,9 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
         )
         now = datetime.now(tz=utc)
         response = res.json()
+        warnings = response.get("meldingen", [])
+        if warnings:
+            current_app.logger.info(f"Got {len(warnings)} warnings:\n{json.dumps(warnings, indent=4)}")
         values = response.get("waarden", [])
         current_app.logger.info(f"Got {len(values)} values...")
         if len(values) == 0:
