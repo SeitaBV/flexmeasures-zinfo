@@ -2,7 +2,6 @@ __version__ = "0.6"
 
 import os
 import sys
-import yaml
 from datetime import datetime
 from pytz import utc
 from pytz.exceptions import AmbiguousTimeError
@@ -22,7 +21,7 @@ import pandas as pd
 import requests
 from timely_beliefs import BeliefsDataFrame
 
-from .utils import get_access_token
+from .utils import get_access_token, log_notifications
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -74,11 +73,7 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
         )
         now = datetime.now(tz=utc)
         response = res.json()
-        notifications = response.get("meldingen", [])
-        if notifications:
-            current_app.logger.info(
-                f"Got {len(notifications)} notifications:\n{yaml.dump(notifications, indent=4)}"
-            )
+        log_notifications(response)
         values = response.get("waarden", [])
         current_app.logger.info(f"Got {len(values)} values...")
         if len(values) == 0:
