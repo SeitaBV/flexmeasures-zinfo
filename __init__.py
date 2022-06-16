@@ -74,9 +74,9 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
         )
         now = datetime.now(tz=utc)
         response = res.json()
-        warnings = response.get("meldingen", [])
-        if warnings:
-            current_app.logger.info(f"Got {len(warnings)} warnings:\n{yaml.dump(warnings, indent=4)}")
+        notifications = response.get("meldingen", [])
+        if notifications:
+            current_app.logger.info(f"Got {len(notifications)} notifications:\n{yaml.dump(notifications, indent=4)}")
         values = response.get("waarden", [])
         current_app.logger.info(f"Got {len(values)} values...")
         if len(values) == 0:
