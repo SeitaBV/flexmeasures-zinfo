@@ -46,8 +46,8 @@ zinfo_bp.cli.help = "Z-info Data commands"
     required=False,
     default=True,
     help="If True, unchanged beliefs are skipped (updated beliefs are only stored if they represent changed beliefs). "
-         "If False, all updated beliefs are stored. "
-         "Tip: for large imports, set to False and use `flexmeasures delete unchanged-beliefs` to clean up afterwards.",
+    "If False, all updated beliefs are stored. "
+    "Tip: for large imports, set to False and use `flexmeasures delete unchanged-beliefs` to clean up afterwards.",
 )
 @click.option(
     "--dryrun/--no-dryrun",
@@ -56,7 +56,11 @@ zinfo_bp.cli.help = "Z-info Data commands"
 )
 @with_appcontext
 @task_with_status_report("zinfo-import-sensor-data")
-def import_sensor_data(zinfo_spcids: List[str], save_changed_beliefs_only: bool = True, dryrun: bool = False):
+def import_sensor_data(
+    zinfo_spcids: List[str],
+    save_changed_beliefs_only: bool = True,
+    dryrun: bool = False,
+):
     """
     Import sensor data from Z-info, given at least one specification ID.
     """
@@ -167,7 +171,9 @@ def import_sensor_data(zinfo_spcids: List[str], save_changed_beliefs_only: bool 
                     )
                 ].droplevel(zinfo_sensor_name_field)[zinfo_event_value_field]
 
-                save_new_beliefs(df_sensor, data_source, sensor, now, save_changed_beliefs_only)
+                save_new_beliefs(
+                    df_sensor, data_source, sensor, now, save_changed_beliefs_only
+                )
 
             # Save derived sensors
             sensors = ensure_zinfo_sensors(
@@ -197,7 +203,9 @@ def import_sensor_data(zinfo_spcids: List[str], save_changed_beliefs_only: bool 
                         zinfo_event_value_field
                     ]
 
-                save_new_beliefs(df_sensor, data_source, sensor, now, save_changed_beliefs_only)
+                save_new_beliefs(
+                    df_sensor, data_source, sensor, now, save_changed_beliefs_only
+                )
 
 
 def localize_time_series(s: pd.Series, timezone: str) -> pd.Series:
