@@ -1,4 +1,4 @@
-__version__ = "0.6"
+__version__ = "0.7"
 
 import os
 import sys
@@ -15,7 +15,6 @@ from flexmeasures.data.config import db
 from flexmeasures.data.models.data_sources import DataSource
 from flexmeasures.data.models.generic_assets import GenericAsset
 from flexmeasures.data.models.time_series import Sensor
-from flexmeasures.data.services.time_series import drop_unchanged_beliefs
 from flexmeasures.data.transactional import task_with_status_report
 import pandas as pd
 import requests
@@ -42,13 +41,26 @@ zinfo_bp.cli.help = "Z-info Data commands"
     help="Which Z-info specification ID(s) to use.",
 )
 @click.option(
+    "--save-changed-beliefs-only/--save-all-beliefs",
+    "save_changed_beliefs_only",
+    required=False,
+    default=True,
+    help="If True, unchanged beliefs are skipped (updated beliefs are only stored if they represent changed beliefs). "
+    "If False, all updated beliefs are stored. "
+    "Tip: for large imports, set to False and use `flexmeasures delete unchanged-beliefs` to clean up afterwards.",
+)
+@click.option(
     "--dryrun/--no-dryrun",
     default=False,
     help="In Dry run, do not save the data to the db.",
 )
 @with_appcontext
 @task_with_status_report("zinfo-import-sensor-data")
-def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
+def import_sensor_data(
+    zinfo_spcids: List[str],
+    save_changed_beliefs_only: bool = True,
+    dryrun: bool = False,
+):
     """
     Import sensor data from Z-info, given at least one specification ID.
     """
@@ -159,7 +171,9 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
                     )
                 ].droplevel(zinfo_sensor_name_field)[zinfo_event_value_field]
 
-                save_new_beliefs(df_sensor, data_source, sensor, now)
+                save_new_beliefs(
+                    df_sensor, data_source, sensor, now, save_changed_beliefs_only
+                )
 
             # Save derived sensors
             sensors = ensure_zinfo_sensors(
@@ -189,7 +203,9 @@ def import_sensor_data(zinfo_spcids: List[str], dryrun: bool = False):
                         zinfo_event_value_field
                     ]
 
-                save_new_beliefs(df_sensor, data_source, sensor, now)
+                save_new_beliefs(
+                    df_sensor, data_source, sensor, now, save_changed_beliefs_only
+                )
 
 
 def localize_time_series(s: pd.Series, timezone: str) -> pd.Series:
@@ -209,7 +225,13 @@ def localize_time_series(s: pd.Series, timezone: str) -> pd.Series:
         )
 
 
-def save_new_beliefs(df_sensor, data_source, sensor, belief_time) -> BeliefsDataFrame:
+def save_new_beliefs(
+    df_sensor,
+    data_source,
+    sensor,
+    belief_time,
+    save_changed_beliefs_only: bool = True,
+) -> BeliefsDataFrame:
     # required by timely_beliefs, TODO: check if that still is the case, see https://github.com/SeitaBV/timely-beliefs/issues/64
     df_sensor.index.name = "event_start"
     df_sensor.name = "event_value"
@@ -221,11 +243,8 @@ def save_new_beliefs(df_sensor, data_source, sensor, belief_time) -> BeliefsData
         belief_time=belief_time,
     )
 
-    # Drop beliefs that haven't changed
-    bdf = drop_unchanged_beliefs(bdf)
-
     # TODO: evaluate some traits of the data via FlexMeasures, see https://github.com/SeitaBV/flexmeasures-entsoe/issues/3
-    status = save_to_db(bdf)
+    status = save_to_db(bdf, save_changed_beliefs_only=save_changed_beliefs_only)
     current_app.logger.info(f"Saved data for {bdf.sensor} with status: {status} ...")
 
 
